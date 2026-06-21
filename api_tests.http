@@ -1,0 +1,103 @@
+### Neptune Industrial Thermal SaaS API Integration Suite
+@host = http://localhost:3000
+
+### 1. HEALTH AND READINESS
+GET {{host}}/api/health
+Accept: application/json
+
+###
+
+### 2. REGISTER A NEW DATA CENTER OWNER (Heat Producer)
+# @name registerDC
+POST {{host}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "producer@neptune.io",
+  "password": "password123",
+  "role": "DATA_CENTER"
+}
+
+###
+
+### 3. REGISTER A NEW DISTRICT HEATING UTILITY OWNER (Heat Buyer)
+# @name registerBuyer
+POST {{host}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "district@bhopalgrid.in",
+  "password": "password123",
+  "role": "HEAT_BUYER"
+}
+
+###
+
+### 4. LOGIN SECURELY TO THE PORTAL (Using Seed Account Credentials)
+# @name loginAdmin
+POST {{host}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "teamashish2005@gmail.com",
+  "password": "password123"
+}
+
+### Store the Bearer token returned from Login response to authenticate following endpoints.
+@token = {{loginAdmin.response.body.token}}
+
+###
+
+### 5. RETRIEVE ALL SYSTEM FACILITIES (With profile & compliance detail overlays)
+GET {{host}}/api/v1/facilities
+Authorization: Bearer {{token}}
+
+###
+
+### 6. REGISTER A NEW HEAT PRODUCER FACILITY
+# @name createDCFacility
+POST {{host}}/api/v1/facilities
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Bhopal Edge Cloud Substation Delta",
+  "type": "DATA_CENTER",
+  "latitude": 23.2599,
+  "longitude": 77.4126,
+  "coolingSystemType": "Direct Liquid Immersion Chassis"
+}
+
+###
+
+### 7. RUN COMPLIANCE RECALCULATION ON-DEMAND
+POST {{host}}/api/v1/compliance/recalculate/dc-facility-1
+Authorization: Bearer {{token}}
+
+###
+
+### 8. QUERY THE GEOSPATIAL MATCHMAKING ENGINE FOR LINKAGES
+GET {{host}}/api/v1/matches/nearby?facilityId=dc-facility-1&radiusKm=5
+Authorization: Bearer {{token}}
+
+###
+
+### 9. BIND MATCH TO FORMAL FLOW CONTRACT (Accepting match-3)
+POST {{host}}/api/v1/contracts/match-3/accept
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "pricePerGJ": "6.20"
+}
+
+###
+
+### 10. GENERATE CRYPTOGRAPHIC CERTIFICATES BACKED CARBON CREDITS
+POST {{host}}/api/v1/carbon-credits/generate
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "deliveryId": "c1-del-2"
+}

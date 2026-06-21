@@ -1,0 +1,10 @@
+{
+  "name": "Neptune",
+  "description": "Industrial Waste Heat Compliance and Trading Platform (by jua2.0) - B2B SaaS matches waste heat producers with nearby buyers, tracks Energy Reuse Factor (ERF), and handles thermal trading contracts.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
