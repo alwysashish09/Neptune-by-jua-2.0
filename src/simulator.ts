@@ -4,7 +4,8 @@
  */
 
 import { db } from "./dbStore.js";
-import { Role } from "./types.js";
+import { Role, PolicyStatus } from "./types.js";
+import { coolingPolicyService } from "./coolingPolicyService.js";
 
 type ListenerCallback = (event: string, data: any) => void;
 
@@ -46,7 +47,7 @@ class IoTTelemetrySimulator {
     }
   }
 
-  private sweepFacilities() {
+  private async sweepFacilities() {
     const state = db.getState();
     const dcFacilities = state.facilities.filter(f => f.type === Role.DATA_CENTER);
 
@@ -54,18 +55,50 @@ class IoTTelemetrySimulator {
       const profile = db.getThermalProfileByFacilityId(facility.id);
       if (!profile) continue;
 
-      // Random walk Exit Temp (55°C - 75°C)
       let temp = profile.currentExitTempC ?? 65.0;
-      const tDelta = (Math.random() - 0.5) * 1.0; // ±0.5°C
-      temp = Math.min(Math.max(temp + tDelta, 55.0), 75.0);
-
-      // Random walk Load Percent (40% - 95%)
       let load = profile.currentLoadPercent ?? 60.0;
+      
+      const pol = db.getCoolingPolicyByFacilityId(facility.id);
+      
+      if (pol && pol.status === PolicyStatus.DEPLOYED) {
+          // RL Controller Drive
+          const action = await coolingPolicyService.runInference(facility.id);
+          
+          if (action.safetyOverrideTriggered) {
+             this.broadcast("cooling:safety-override", {
+                 facilityId: facility.id,
+                 serverTempC: temp,
+                 timestamp: new Date().toISOString()
+             });
+          }
+          
+          // Apply basic RL thermal translation instead of random walk
+          const k_load = 0.05, k_cool = 0.02, k_ambient = 0.01;
+          const eff = 1.0 - (action.recycledMixRatio * 0.1);
+          const ambient = 25.0;
+          const tempDelta = (k_load * load) - (k_cool * action.pumpFlowRatePercent * eff) - (k_ambient * (temp - ambient));
+          
+          temp = Math.min(Math.max(temp + tempDelta, 20.0), 90.0);
+          
+          this.broadcast("cooling:decision", {
+            facilityId: facility.id,
+            pumpFlowRatePercent: action.pumpFlowRatePercent,
+            recycledMixRatio: action.recycledMixRatio,
+            safetyOverrideTriggered: action.safetyOverrideTriggered,
+            timestamp: new Date().toISOString()
+          });
+
+      } else {
+          // Legacy Random Walk
+          const tDelta = (Math.random() - 0.5) * 1.0; // ±0.5°C
+          temp = Math.min(Math.max(temp + tDelta, 55.0), 75.0);
+      }
+
+      // Random walk load regardless
       const lDelta = (Math.random() - 0.5) * 6.0; // ±3%
       load = Math.min(Math.max(load + lDelta, 40.0), 95.0);
 
       // Dynamically calculate available MWth based on load
-      // Linear scale: at baseline 40% load, capacity = 5.0 MWth. At 95% load, capacity = 15.0 MWth
       const calcMWth = 5.0 + ((load - 40.0) / 55.0) * 10.0;
       const availableThermalOutputMWth = parseFloat(calcMWth.toFixed(2));
 

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Facility, ComplianceRecord, ComplianceStatus } from "../types.js";
+import AquaRlPanel from "./AquaRlPanel.js";
 
 interface DashboardProps {
   token: string;
@@ -296,6 +297,9 @@ export default function Dashboard({
             </div>
 
           </div>
+          
+          {/* AQUA-RL PANEL */}
+          <AquaRlPanel facilityId={selectedFacility.id} token={token} sseData={sseData} />
 
           {/* Core Telemetry and Live Dual-Axis Chart Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

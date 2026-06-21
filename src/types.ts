@@ -3,6 +3,51 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export enum PolicyStatus {
+  SIMULATING = "SIMULATING",
+  TRAINING = "TRAINING",
+  DEPLOYED = "DEPLOYED",
+  PAUSED = "PAUSED"
+}
+
+export interface CoolingPolicy {
+  id: string;
+  facilityId: string;
+  modelVersion: string;     // default "aqua-rl-v1"
+  status: PolicyStatus;     // default SIMULATING
+  trainingEpisodes: number;
+  cumulativeWaterSavedLiters: number;
+  cumulativeFreshwaterAvoidedLiters: number;
+  baselineComparisonLiters: number;
+  lastTrainedAt?: string;
+  createdAt: string;
+}
+
+export interface CoolingDecisionLog {
+  id: string;
+  facilityId: string;
+  timestamp: string;
+  observedTempC: number;
+  observedLoadPercent: number;
+  recycledTankLevelPercent?: number;
+  freshwaterTankLevelPercent?: number;
+  ambientTempC?: number;
+  pumpFlowRatePercent: number;
+  recycledRatio: number;
+  safetyOverrideTriggered: boolean;
+  rewardSignal?: number;
+  source?: string;
+}
+
+export interface WaterProfile {
+  id: string;
+  facilityId: string;
+  recycledTankLevelPercent: number;
+  freshwaterTankLevelPercent: number;
+  ambientTempC: number;
+  updatedAt: string;
+}
+
 export enum Role {
   DATA_CENTER = "DATA_CENTER",
   HEAT_BUYER = "HEAT_BUYER",
@@ -173,6 +218,9 @@ export interface AppState {
   capsuleIDs?: CapsuleID[];
   countrySequences?: CountrySequence[];
   networkCounters?: NetworkCounters;
+  coolingPolicies?: CoolingPolicy[];
+  coolingDecisionLogs?: CoolingDecisionLog[];
+  waterProfiles?: WaterProfile[];
 }
 
 export enum CapsuleStatus {

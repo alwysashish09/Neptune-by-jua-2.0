@@ -13,6 +13,8 @@ import { recalculateCompliance } from "./src/complianceService.js";
 import { simulator } from "./src/simulator.js";
 import { Role, MatchStatus, ContractStatus, ComplianceStatus, SeatRole, OrgPlan } from "./src/types.js";
 
+import { coolingPolicyService } from "./src/coolingPolicyService.js";
+
 const app = express();
 const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || "neptune-cyber-heat-industrial-key-2026-v1";
@@ -977,6 +979,53 @@ app.get("/api/v1/facilities/:id/compliance", authMiddleware, (req, res) => {
   res.json(rec || null);
 });
 
+
+// ==========================================
+// 2.5: AQUA-RL COOLING CONTROLS
+// ==========================================
+
+app.get("/api/v1/facilities/:id/cooling-policy/status", authMiddleware, (req, res) => {
+  const pol = db.getCoolingPolicyByFacilityId(req.params.id);
+  if (!pol) {
+    // Return a dummy default so frontend won't crash
+    return res.json({
+      facilityId: req.params.id,
+      modelVersion: "aqua-rl-v1",
+      status: "SIMULATING",
+      trainingEpisodes: 0,
+      cumulativeWaterSavedLiters: 0,
+      cumulativeFreshwaterAvoidedLiters: 0,
+      baselineComparisonLiters: 0
+    });
+  }
+  res.json(pol);
+});
+
+app.post("/api/v1/facilities/:id/cooling-policy/inference", authMiddleware, async (req, res) => {
+  try {
+    const action = await coolingPolicyService.runInference(req.params.id);
+    res.json(action);
+  } catch (err: any) {
+    res.status(500).json({ error: { code: "INFERENCE_FAIL", message: err.message } });
+  }
+});
+
+app.get("/api/v1/facilities/:id/cooling-policy/efficiency-report", authMiddleware, (req, res) => {
+  const { range } = req.query;
+  const report = coolingPolicyService.getEfficiencyReport(req.params.id, (range as string) || "7d");
+  res.json(report);
+});
+
+app.patch("/api/v1/facilities/:id/cooling-policy/status", authMiddleware, (req, res) => {
+  const { status } = req.body;
+  const pol = db.updateCoolingPolicy(req.params.id, { status });
+  // Broadcast to all clients
+  const payloadStr = `event: policy:updated\ndata: ${JSON.stringify(pol)}\n\n`;
+  for (const client of activeClients) {
+    try { client.res.write(payloadStr); } catch (e) {}
+  }
+  res.json(pol);
+});
 
 // ==========================================
 // 3. COMPLIANCE RECALCULATION

@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  cooling-rl:
+    build: ./apps/cooling-rl
+    ports:
+      - "8001:8001"
+    volumes:
+      - "./apps/cooling-rl/models:/app/models"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1358,6 +1358,72 @@ export class DBStore {
     this.save();
     return { facility, capsule };
   }
+  public getWaterProfileByFacilityId(facilityId: string) {
+    if (!this.state.waterProfiles) this.state.waterProfiles = [];
+    return this.state.waterProfiles.find(wp => wp.facilityId === facilityId);
+  }
+
+  public updateWaterProfile(facilityId: string, updates: any) {
+    if (!this.state.waterProfiles) this.state.waterProfiles = [];
+    let wp = this.getWaterProfileByFacilityId(facilityId);
+    if (!wp) {
+      wp = {
+        id: "wp-" + Math.random().toString(36).substring(2, 11),
+        facilityId,
+        recycledTankLevelPercent: 100,
+        freshwaterTankLevelPercent: 100,
+        ambientTempC: 25,
+        updatedAt: new Date().toISOString()
+      };
+      this.state.waterProfiles.push(wp);
+    }
+    Object.assign(wp, updates);
+    wp.updatedAt = new Date().toISOString();
+    this.save();
+    return wp;
+  }
+
+  public getCoolingPolicyByFacilityId(facilityId: string) {
+    if (!this.state.coolingPolicies) this.state.coolingPolicies = [];
+    return this.state.coolingPolicies.find(p => p.facilityId === facilityId);
+  }
+
+  public updateCoolingPolicy(facilityId: string, updates: any) {
+    if (!this.state.coolingPolicies) this.state.coolingPolicies = [];
+    let pol = this.getCoolingPolicyByFacilityId(facilityId);
+    if (!pol) {
+      pol = {
+        id: "pol-" + Math.random().toString(36).substring(2, 11),
+        facilityId,
+        modelVersion: "aqua-rl-v1",
+        status: "SIMULATING" as any,
+        trainingEpisodes: 0,
+        cumulativeWaterSavedLiters: 0,
+        cumulativeFreshwaterAvoidedLiters: 0,
+        baselineComparisonLiters: 0,
+        createdAt: new Date().toISOString()
+      };
+      this.state.coolingPolicies.push(pol);
+    }
+    Object.assign(pol, updates);
+    this.save();
+    return pol;
+  }
+
+  public logCoolingDecision(log: any) {
+    if (!this.state.coolingDecisionLogs) this.state.coolingDecisionLogs = [];
+    this.state.coolingDecisionLogs.push({
+      ...log,
+      id: log.id || "cdl-" + Math.random().toString(36).substring(2, 11),
+      timestamp: log.timestamp || new Date().toISOString()
+    });
+    this.save();
+  }
+
+  public getCoolingDecisionLogs(facilityId: string) {
+    if (!this.state.coolingDecisionLogs) this.state.coolingDecisionLogs = [];
+    return this.state.coolingDecisionLogs.filter(L => L.facilityId === facilityId);
+  }
 }
 
 // Global Export
