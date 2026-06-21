@@ -647,6 +647,185 @@ app.post("/api/v1/auth/google/simulation-token-bake", (req, res) => {
 
 
 // ==========================================
+// 1.5. NEPTUNE NETWORK PUBLIC ROUTES
+// ==========================================
+
+// GET /api/v1/network/stats
+app.get("/api/v1/network/stats", (req, res) => {
+  res.json(db.getNetworkCounters());
+});
+
+// GET /api/v1/network/nodes
+app.get("/api/v1/network/nodes", (req, res) => {
+  const facilities = db.getFacilities();
+  const capsules = db.getCapsuleIDs();
+  
+  const nodes = facilities.map(f => {
+    const cap = capsules.find(c => c.facilityId === f.id);
+    return {
+      id: f.id,
+      name: f.name,
+      type: f.type,
+      latitude: f.latitude,
+      longitude: f.longitude,
+      capsuleCode: cap?.capsuleCode || null,
+      status: cap?.status || "PENDING_VERIFICATION",
+      onChainAnchored: cap?.onChainAnchored || false,
+      publicProfileSlug: cap?.publicProfileSlug || null
+    };
+  });
+  
+  res.json(nodes);
+});
+
+// GET /api/v1/network/leaderboard
+app.get("/api/v1/network/leaderboard", (req, res) => {
+  const { metric } = req.query;
+  const facilities = db.getFacilities();
+  const contracts = db.getContracts();
+  
+  const leaderboard = facilities.map(fac => {
+    let heatTraded = 0;
+    const matches = db.getMatches().filter(m => m.sourceFacilityId === fac.id || m.buyerFacilityId === fac.id);
+    const matchIds = new Set(matches.map(m => m.id));
+    const facContracts = contracts.filter(c => matchIds.has(c.matchId));
+    
+    for (const contract of facContracts) {
+      const dels = db.getDeliveriesByContractId(contract.id);
+      heatTraded += dels.reduce((sum, d) => sum + d.gjDelivered, 0);
+    }
+    
+    const waterOffset = heatTraded * 15.5;
+    
+    return {
+      facilityId: fac.id,
+      name: fac.name,
+      type: fac.type,
+      countryCode: fac.countryCode || "IN",
+      totalGjTraded: parseFloat(heatTraded.toFixed(2)),
+      totalLitersWaterOffset: parseFloat(waterOffset.toFixed(2))
+    };
+  });
+  
+  if (metric === "water") {
+    leaderboard.sort((a, b) => b.totalLitersWaterOffset - a.totalLitersWaterOffset);
+  } else {
+    leaderboard.sort((a, b) => b.totalGjTraded - a.totalGjTraded);
+  }
+  
+  res.json(leaderboard.slice(0, 10));
+});
+
+// GET /api/v1/network/:slug
+app.get("/api/v1/network/:slug", (req, res) => {
+  const { slug } = req.params;
+  const capsule = db.getCapsuleBySlug(slug);
+  if (!capsule) {
+    return res.status(404).json({ error: { message: `Capsule profile not found for slug '${slug}'` } });
+  }
+  
+  const facility = db.getFacilityById(capsule.facilityId);
+  if (!facility) {
+    return res.status(404).json({ error: { message: "Linked facility not found" } });
+  }
+  
+  let heatTraded = 0;
+  const matches = db.getMatches().filter(m => m.sourceFacilityId === facility.id || m.buyerFacilityId === facility.id);
+  const matchIds = new Set(matches.map(m => m.id));
+  const contracts = db.getContracts().filter(c => matchIds.has(c.matchId));
+  
+  for (const contract of contracts) {
+    const dels = db.getDeliveriesByContractId(contract.id);
+    heatTraded += dels.reduce((sum, d) => sum + d.gjDelivered, 0);
+  }
+  
+  const waterOffset = heatTraded * 15.5;
+  const co2AvoidedKg = heatTraded * 50;
+  
+  res.json({
+    capsule,
+    facility: {
+      id: facility.id,
+      name: facility.name,
+      type: facility.type,
+      latitude: facility.latitude,
+      longitude: facility.longitude,
+      coolingSystemType: facility.coolingSystemType,
+      countryCode: facility.countryCode || "IN",
+      createdAt: facility.createdAt
+    },
+    publicStats: {
+      totalGjTraded: parseFloat(heatTraded.toFixed(2)),
+      totalLitersWaterOffset: parseFloat(waterOffset.toFixed(2)),
+      totalCo2AvoidedKg: parseFloat(co2AvoidedKg.toFixed(2))
+    }
+  });
+});
+
+// POST /api/v1/network/register/claim-location
+app.post("/api/v1/network/register/claim-location", (req, res) => {
+  const { latitude, longitude, type } = req.body;
+  if (latitude === undefined || longitude === undefined || !type) {
+    return res.status(400).json({ error: { message: "latitude, longitude, and type are required" } });
+  }
+  
+  const latNum = parseFloat(latitude);
+  const lngNum = parseFloat(longitude);
+  
+  const facilities = db.getFacilities();
+  let matchCount = 0;
+  
+  for (const f of facilities) {
+    if (f.type !== type) {
+      const R = 6371; 
+      const dLat = (f.latitude - latNum) * Math.PI / 180;
+      const dLon = (f.longitude - lngNum) * Math.PI / 180;
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(latNum * Math.PI / 180) * Math.cos(f.latitude * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      
+      if (distance <= 5.0) {
+        matchCount++;
+      }
+    }
+  }
+  
+  res.json({ matchCount });
+});
+
+// POST /api/v1/network/register/mint-capsule-id
+app.post("/api/v1/network/register/mint-capsule-id", (req, res) => {
+  const { facilityName, latitude, longitude, type } = req.body;
+  if (!facilityName || latitude === undefined || longitude === undefined || !type) {
+    return res.status(400).json({ error: { message: "All registering fields are required to mint Capsule ID" } });
+  }
+  
+  const latNum = parseFloat(latitude);
+  const lngNum = parseFloat(longitude);
+  
+  const { facility, capsule } = db.createDraftFacilityAndCapsule(facilityName, type, latNum, lngNum);
+  
+  const payloadStr = `event: network:counters-updated\ndata: ${JSON.stringify(db.recalculateNetworkCounters())}\n\n`;
+  for (const client of activeClients) {
+    try {
+      client.res.write(payloadStr);
+    } catch (e) {
+      // client offline
+    }
+  }
+  
+  res.status(201).json({
+    success: true,
+    facility,
+    capsule
+  });
+});
+
+
+// ==========================================
 // 2. FACILITIES ROUTING
 // ==========================================
 
@@ -702,6 +881,29 @@ app.post("/api/v1/facilities", authMiddleware, (req: any, res) => {
   const member = db.getOrgMembers().find(m => m.organizationId === targetOrgId && m.userId === req.user.userId && m.acceptedAt !== null);
   if (!member || (member.seatRole !== SeatRole.ADMIN && member.seatRole !== SeatRole.OPERATOR)) {
     return res.status(403).json({ error: { code: "FORBIDDEN", message: "Only Admins and Operators can register new facilities" } });
+  }
+
+  // Enforce SaaS plan resource thresholds
+  const org = db.getOrganizationById(targetOrgId);
+  const currentPlan = org ? org.plan : OrgPlan.STARTER;
+  const currentAssetCount = db.getFacilities().filter(f => f.organizationId === targetOrgId).length;
+
+  if (currentPlan === OrgPlan.STARTER && currentAssetCount >= 1) {
+    return res.status(403).json({
+      error: {
+        code: "LIMIT_REACHED",
+        message: "Starter (Free) tier is restricted to at most 1 physical facility asset. Please upgrade to the Growth (limit 5) or Enterprise (unlimited) SaaS plan via Razorpay to connect additional grid nodes!"
+      }
+    });
+  }
+
+  if (currentPlan === OrgPlan.GROWTH && currentAssetCount >= 5) {
+    return res.status(403).json({
+      error: {
+        code: "LIMIT_REACHED",
+        message: "Growth plan tier is restricted to at most 5 physical facility assets. Please upgrade to the unlimited Enterprise tier via Razorpay to connect unlimited grid nodes!"
+      }
+    });
   }
 
   const newFacility = db.createFacility(name, type, lat, lng, coolingSystemType, req.user.userId, targetOrgId);
@@ -844,6 +1046,161 @@ app.post("/api/v1/compliance/link-report", authMiddleware, (req: any, res) => {
   db.save();
 
   res.json({ success: true, link: newLink });
+});
+
+
+// ==========================================
+// 3.7. RAZORPAY BILLING AND SAAS SUBSCRIPTIONS
+// ==========================================
+
+app.get("/api/v1/billing/razorpay-config", authMiddleware, (req: any, res) => {
+  const keyId = process.env.RAZORPAY_KEY_ID || "rzp_test_Neptune77839";
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  res.json({
+    keyId,
+    hasSecret: !!keySecret,
+    isSandbox: !keySecret || keySecret.trim() === "" || keyId === "YOUR_RAZORPAY_KEY_ID"
+  });
+});
+
+app.post("/api/v1/billing/create-order", authMiddleware, async (req: any, res) => {
+  const { type, planType, deliveryId, amount } = req.body;
+  
+  if (!type || !amount) {
+    return res.status(400).json({ error: { code: "BAD_REQUEST", message: "type and amount are required fields" } });
+  }
+
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const isReal = keyId && keySecret && keyId !== "YOUR_RAZORPAY_KEY_ID" && keySecret !== "YOUR_RAZORPAY_KEY_SECRET";
+
+  const orderId = `order_${Math.random().toString(36).substring(2, 11)}`;
+  
+  if (isReal) {
+    try {
+      const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+      const rzpResponse = await fetch("https://api.razorpay.com/v1/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${auth}`
+        },
+        body: JSON.stringify({
+          amount: Math.round(amount * 100), // convert to paisa
+          currency: "INR",
+          receipt: `rcpt_${Math.random().toString(36).substring(2, 8)}`,
+          notes: {
+            type,
+            planType: planType || "",
+            deliveryId: deliveryId || ""
+          }
+        })
+      });
+
+      if (rzpResponse.ok) {
+        const rzpOrder = await rzpResponse.json();
+        return res.json({
+          orderId: rzpOrder.id,
+          amount: amount,
+          currency: "INR",
+          isSimulated: false
+        });
+      } else {
+        const rzpErr = await rzpResponse.text();
+        console.error("Razorpay remote order creation failed", rzpErr);
+      }
+    } catch (err: any) {
+      console.error("Razorpay REST exception - falling back to simulated checkout", err);
+    }
+  }
+
+  res.json({
+    orderId,
+    amount,
+    currency: "INR",
+    isSimulated: true
+  });
+});
+
+app.post("/api/v1/billing/verify-payment", authMiddleware, (req: any, res) => {
+  const {
+    type,
+    planType,
+    deliveryId,
+    organizationId,
+    razorpay_payment_id,
+    razorpay_order_id,
+    razorpay_signature,
+    isSimulated
+  } = req.body;
+
+  const paymentId = razorpay_payment_id || `pay_${Math.random().toString(36).substring(2, 11)}`;
+  const state = db.getState();
+
+  if (type === "SUBSCRIBE_PLAN") {
+    if (!organizationId || !planType) {
+      return res.status(400).json({ error: { code: "BAD_REQUEST", message: "organizationId and planType are required for upgrades" } });
+    }
+    const org = db.getOrganizationById(organizationId);
+    if (!org) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Target organization space not found" } });
+    }
+    
+    // Update org plan
+    db.updateOrganizationPlan(organizationId, planType);
+    
+    // Log billing history details
+    if (!state.billingHistory) {
+      state.billingHistory = [];
+    }
+    state.billingHistory.push({
+      id: `bill_${Math.random().toString(36).substring(2, 11)}`,
+      organizationId,
+      amount: planType === "GROWTH" ? 4999 : 19999,
+      purpose: `Upgrade to ${planType} SaaS subscription`,
+      plan: planType,
+      paymentId,
+      date: new Date().toISOString(),
+      status: "SUCCESS"
+    });
+    db.save();
+
+    return res.json({
+      success: true,
+      message: `Successfully upgraded to the premium ${planType} plan.`,
+      plan: planType
+    });
+
+  } else if (type === "TRANSACTION_FEE") {
+    if (!deliveryId) {
+      return res.status(400).json({ error: { code: "BAD_REQUEST", message: "deliveryId is required" } });
+    }
+    
+    const delivery = state.deliveries.find(d => d.id === deliveryId);
+    if (!delivery) {
+      return res.status(404).json({ error: { code: "NOT_FOUND", message: "Referenced delivery log not found" } });
+    }
+
+    delivery.transactionFeePaid = true;
+    delivery.transactionFeeAmount = parseFloat((delivery.settledAmount * 0.015).toFixed(2));
+    delivery.razorpayPaymentId = paymentId;
+
+    db.save();
+
+    return res.json({
+      success: true,
+      message: "Transaction fee settled successfully. Offsets certified.",
+      delivery
+    });
+  }
+
+  res.status(400).json({ error: { code: "BAD_REQUEST", message: "Invalid payment context type" } });
+});
+
+app.get("/api/v1/billing/history", authMiddleware, (req: any, res) => {
+  const state = db.getState();
+  const history = state.billingHistory || [];
+  res.json(history);
 });
 
 

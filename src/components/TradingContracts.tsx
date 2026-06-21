@@ -15,13 +15,17 @@ interface TradingContractsProps {
   facilities: Facility[];
   selectedFacility: Facility | null;
   retriggerDashboardUpdate: () => void;
+  activeOrg: any;
+  onUpgradeClick: () => void;
 }
 
 export default function TradingContracts({
   token,
   facilities,
   selectedFacility,
-  retriggerDashboardUpdate
+  retriggerDashboardUpdate,
+  activeOrg,
+  onUpgradeClick
 }: TradingContractsProps) {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
@@ -31,8 +35,128 @@ export default function TradingContracts({
   const [carbonCredits, setCarbonCredits] = useState<CarbonCredit[]>([]);
   const [mintingId, setMintingId] = useState<string | null>(null);
 
+  // Fee checkout and feedback alerts
+  const [feeCheckoutDelivery, setFeeCheckoutDelivery] = useState<ThermalDelivery | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   // States for matching search
   const [radiusKm, setRadiusKm] = useState("5");
+
+  const handlePayTransactionFee = async (deliveryId: string, inrAmount: number) => {
+    setLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const verifyRes = await fetch("/api/v1/billing/verify-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: "TRANSACTION_FEE",
+          deliveryId: deliveryId,
+          amount: inrAmount,
+          razorpay_payment_id: `pay_fee_sim_${Math.random().toString(36).substring(2, 10)}`,
+          isSimulated: true
+        })
+      });
+
+      if (verifyRes.ok) {
+        setSuccessMessage(`Success! Transaction Fee ₹${inrAmount.toLocaleString()} paid via Razorpay Gate.`);
+        setFeeCheckoutDelivery(null);
+        if (selectedContract) {
+          fetchDeliveries(selectedContract.id);
+        }
+      } else {
+        setErrorMessage("Transaction fee ledger approval rejected by banking gateway.");
+      }
+    } catch (e) {
+      setErrorMessage("Razorpay payment proxy connection timed out.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownloadPDFReport = () => {
+    if (!activeOrg || activeOrg.plan !== "ENTERPRISE") {
+      setErrorMessage(`Compliance Report PDF Export is restricted to Enterprise SaaS tier accounts. Your current organizational plan is ${activeOrg?.plan?.toUpperCase() || "STARTER"}. Upgrading...`);
+      setTimeout(() => {
+        onUpgradeClick();
+      }, 3000);
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Neptune - Madhya Pradesh Green Board Regulatory Compliance Certificate</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; color: #111; padding: 40px; line-height: 1.4; }
+            .header { border-bottom: 3px double #111; padding-bottom: 20px; text-align: center; }
+            .logo { font-size: 24px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+            .meta { display: flex; justify-content: space-between; margin-top: 15px; font-size: 11px; }
+            .grid-box { border: 1px solid #111; margin-top: 25px; padding: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11px; }
+            th, td { border: 1px solid #111; padding: 8px; text-align: left; }
+            .footer { margin-top: 50px; font-size: 10px; border-top: 1px dashed #111; padding-top: 10px; text-align: center; }
+            @media print {
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">▲ NEPTUNE WASTE HEAT EXCHANGE CERTIFICATE</div>
+            <div>Madhya Pradesh Green Power & Thermal Trading Commission</div>
+            <div class="meta">
+              <span>ORGANIZATION: ${activeOrg.name}</span>
+              <span>GRID LICENSEE ID: MP-THERMAL-${activeOrg.id?.toUpperCase().substring(0, 6)}</span>
+              <span>PRINTED DATE: ${new Date().toLocaleDateString()}</span>
+            </div>
+          </div>
+
+          <div class="grid-box">
+            <strong>CONTRACT ENERGY AUDIT DISCLOSURE SUMMARY:</strong>
+            <p>Contract Target Emitter ID: ${selectedContract?.id}</p>
+            <p>Thermal Pipe Network Receiver: ${selectedContract?.buyerName}</p>
+            <p>Calculated Dynamic Carbon Reductions: ${(deliveries.reduce((sum, d) => sum + d.gjDelivered, 0) * 0.05).toFixed(2)} Metric Tons CO2e</p>
+          </div>
+
+          <h3>VERIFIED TELEMETRY LOGS HISTORY</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>RECORDING TIMESTAMP</th>
+                <th>METER READ (GJ)</th>
+                <th>TRANSACTION FEE STATUS</th>
+                <th>RAZORPAY REFERENCE</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${deliveries.map(d => `
+                <tr>
+                  <td>${new Date(d.timestampEnd).toLocaleString()}</td>
+                  <td>${d.gjDelivered.toFixed(4)} GJ</td>
+                  <td>${d.transactionFeePaid ? "APPROVED" : "AWAITING FEE PAYMENT"}</td>
+                  <td>${d.razorpayPaymentId || "N/A - Direct Meter"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>Validated via Neptune Cryptographic Registry. This document constitutes formal carbon reduction certificates.</p>
+            <button onclick="window.print()" style="margin-top:25px; padding:8px 16px; font-family:inherit; cursor:pointer; font-weight:bold; background-color:#FF6B35; color:#000; border:none; border-radius:4px;">Initiate System Print Command</button>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Fetch match suggestions
   const fetchMatches = async () => {
@@ -394,8 +518,16 @@ export default function TradingContracts({
                 </div>
               </div>
 
-              <div className="px-3 py-1 bg-[#22C55E]/10 border border-[#22C55E]/20 text-[10px] font-semibold font-mono text-green-400 rounded flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5" /> GRID VALVE ENGAGED
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="px-3 py-1 bg-[#22C55E]/10 border border-[#22C55E]/20 text-[10px] font-semibold font-mono text-green-400 rounded flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> GRID VALVE ENGAGED
+                </div>
+                <button
+                  onClick={handleDownloadPDFReport}
+                  className="px-2.5 py-1 text-[9px] bg-[#FF6B35]/15 hover:bg-[#FF6B35]/25 text-[#FF6B35] font-mono font-bold rounded-md border border-[#FF6B35]/35 transition"
+                >
+                  Download Report
+                </button>
               </div>
             </div>
 
@@ -434,6 +566,17 @@ export default function TradingContracts({
                 </div>
               </div>
 
+              {successMessage && (
+                <div className="p-3 text-[11px] font-mono font-bold bg-green-500/10 border border-green-500/35 text-green-400 rounded-lg animate-fadeIn">
+                  {successMessage}
+                </div>
+              )}
+              {errorMessage && (
+                <div className="p-3 text-[11px] font-mono font-bold bg-red-500/10 border border-red-500/35 text-red-400 rounded-lg animate-fadeIn">
+                  {errorMessage}
+                </div>
+              )}
+
               <div className="max-h-[280px] overflow-y-auto rounded-lg border border-[#161F30]/80 default-scrollbar">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-[#0A0E14] font-mono text-[#94A3B8] text-[10px]">
@@ -458,15 +601,22 @@ export default function TradingContracts({
                           <td className="p-3 font-mono font-bold text-white">{del.gjDelivered.toFixed(4)} GJ</td>
                           <td className="p-3 font-mono text-green-400 font-semibold">€{del.settledAmount.toFixed(2)}</td>
                           <td className="p-3 text-right">
-                            {isCertified || containsMatchedInList ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                            {!del.transactionFeePaid ? (
+                              <button
+                                onClick={() => setFeeCheckoutDelivery(del)}
+                                className="px-2 py-0.5 text-[9px] font-semibold bg-amber-500 hover:bg-amber-600 text-black rounded transition font-mono cursor-pointer"
+                              >
+                                Pay Surcharge (₹{Math.round(del.gjDelivered * 15)})
+                              </button>
+                            ) : isCertified || containsMatchedInList ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 animate-pulse">
                                 <Award className="w-3 h-3" /> Certified
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleGenerateCredit(del.id)}
                                 disabled={mintingId === del.id}
-                                className="px-2 py-0.5 text-[9px] font-semibold bg-[#FF6B35] hover:bg-[#FF6B35]/90 text-black rounded transition font-mono"
+                                className="px-2 py-0.5 text-[9px] font-semibold bg-[#FF6B35] hover:bg-[#FF6B35]/90 text-black rounded transition font-mono cursor-pointer"
                               >
                                 {mintingId === del.id ? "Signing..." : "Certify Credits"}
                               </button>
@@ -486,6 +636,41 @@ export default function TradingContracts({
                   </tbody>
                 </table>
               </div>
+
+              {/* simulated Surcharge popup */}
+              {feeCheckoutDelivery && (
+                <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 font-sans text-gray-200">
+                  <div className="w-full max-w-sm bg-[#131722] border-2 border-amber-500/35 rounded-2xl overflow-hidden shadow-2xl flex flex-col justify-between">
+                    <div className="bg-[#1C2030] p-4 border-b border-[#252E43] flex items-center justify-between">
+                      <span className="text-[10px] font-black tracking-widest text-[#FF6B35] uppercase bg-[#FF6B35]/15 border border-[#FF6B35]/30 px-2 py-0.5 rounded">
+                        RAZORPAY Settle Fee
+                      </span>
+                      <button onClick={() => setFeeCheckoutDelivery(null)} className="text-gray-400 hover:text-white transition text-xs font-mono">
+                        [Close]
+                      </button>
+                    </div>
+
+                    <div className="p-4 bg-[#181D2D] text-center border-b border-[#252E43]">
+                      <span className="text-[10px] font-mono uppercase text-gray-400 font-bold">Heat Trade Commission cut (1.5%)</span>
+                      <div className="text-2xl font-black text-white font-mono mt-0.5">₹{Math.round(feeCheckoutDelivery.gjDelivered * 15).toLocaleString()}</div>
+                      <span className="text-[9px] text-amber-400 font-mono uppercase tracking-widest block mt-1">SaaS Billing Loop Enabled</span>
+                    </div>
+
+                    <div className="p-5 font-sans space-y-4">
+                      <p className="text-xs text-gray-400 leading-relaxed font-normal">
+                        Verify the system trade transaction charge of <strong>₹{Math.round(feeCheckoutDelivery.gjDelivered * 15)}</strong> for matching and pipeline transport of <strong>{feeCheckoutDelivery.gjDelivered.toFixed(2)} GJ</strong> of heat across nodes. Paying unlocks certification.
+                      </p>
+                      
+                      <button
+                        onClick={() => handlePayTransactionFee(feeCheckoutDelivery.id, Math.round(feeCheckoutDelivery.gjDelivered * 15))}
+                        className="w-full py-3 bg-[#FF6B35] hover:bg-[#FF6B35]/95 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition"
+                      >
+                        Authorize Trade Surcharge
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Carbon credits certificates hashes review */}
               {carbonCredits.length > 0 && (

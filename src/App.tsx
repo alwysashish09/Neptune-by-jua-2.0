@@ -7,7 +7,7 @@ import React, { useEffect, useState } from "react";
 import { 
   Flame, LogOut, Compass, LayoutDashboard, MapPin, Handshake, 
   User, ShieldAlert, KeyRound, Mail, ArrowRight, Layers, HelpCircle,
-  Users, RefreshCw, PlusCircle, CheckCircle2, AlertTriangle, Cloud
+  Users, RefreshCw, PlusCircle, CheckCircle2, AlertTriangle, Cloud, CreditCard
 } from "lucide-react";
 import LandingPage from "./components/LandingPage.js";
 import Onboarding from "./components/Onboarding.js";
@@ -16,9 +16,13 @@ import TradingContracts from "./components/TradingContracts.js";
 import MapCanvas from "./components/MapCanvas.js";
 import TeamSettings from "./components/TeamSettings.js";
 import DriveAuditor from "./components/DriveAuditor.js";
+import CookieConsent from "./components/CookieConsent.js";
+import PrivacyPolicy from "./components/PrivacyPolicy.js";
+import TermsOfService from "./components/TermsOfService.js";
+import SaasBilling from "./components/SaaSBilling.js";
 import { Facility, Match, Role, SeatRole } from "./types.js";
 
-type MainView = "landing" | "login" | "register" | "onboarding" | "dashboard" | "match" | "trading" | "team" | "drive";
+type MainView = "landing" | "login" | "register" | "onboarding" | "dashboard" | "match" | "trading" | "team" | "drive" | "billing" | "privacy" | "terms";
 
 export default function App() {
   const [view, setView] = useState<MainView>("landing");
@@ -546,6 +550,12 @@ export default function App() {
                   </>
                 )}
               </div>
+
+              <div className="mt-8 text-center text-[11px] font-mono text-[#64748B] space-x-2 border-t border-[#1F2733] pt-4">
+                <button onClick={() => setView("privacy")} className="hover:text-white hover:underline transition">Privacy Policy</button>
+                <span>•</span>
+                <button onClick={() => setView("terms")} className="hover:text-white hover:underline transition">Terms of Service</button>
+              </div>
             </div>
           </div>
         </div>
@@ -656,12 +666,27 @@ export default function App() {
                   <Users className="w-4 h-4 text-[#E9D5FF]" />
                   Team Settings
                 </button>
+
+                <button
+                  id="nav-billing-btn"
+                  onClick={() => setView("billing")}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 border-l-4 rounded-r-lg text-xs font-black font-mono tracking-wider uppercase transition ${view === "billing" ? "border-[#FF6B35] bg-[#1F2733]/60 text-white" : "border-transparent text-[#94A3B8] hover:text-white hover:bg-[#1C2432]/30"}`}
+                >
+                  <CreditCard className="w-4 h-4 text-amber-500" />
+                  SaaS Billing
+                </button>
               </nav>
             </div>
 
             {/* Bottom Account profile panel */}
             <div className="pt-4 border-t border-[#1F2733] space-y-3">
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex justify-between px-2 text-[10px] font-mono text-[#64748B] border-b border-[#1F2733]/45 pb-2">
+                <button onClick={() => setView("privacy")} className="hover:text-white transition">Privacy</button>
+                <span>•</span>
+                <button onClick={() => setView("terms")} className="hover:text-white transition">Terms</button>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs pt-1">
                 <div className="w-8 h-8 rounded-full bg-[#1F2733] border border-[#FF6B35]/30 flex items-center justify-center">
                   <User className="w-4 h-4 text-[#94A3B8]" />
                 </div>
@@ -758,6 +783,8 @@ export default function App() {
                 facilities={facilities}
                 selectedFacility={selectedFacility}
                 retriggerDashboardUpdate={() => loadFacilities(token, activeOrg?.id)}
+                activeOrg={activeOrg}
+                onUpgradeClick={() => setView("billing")}
               />
             )}
 
@@ -773,16 +800,37 @@ export default function App() {
             )}
 
             {view === "team" && activeOrg && (
-              <TeamSettings 
+               <TeamSettings 
+                 token={token}
+                 activeOrg={activeOrg}
+                 onOrgUpdated={() => loadOrganizations(token, activeOrg.id)}
+               />
+            )}
+
+            {view === "billing" && activeOrg && (
+              <SaasBilling 
                 token={token}
                 activeOrg={activeOrg}
-                onOrgUpdated={() => loadOrganizations(token, activeOrg.id)}
+                onPlanUpgraded={() => loadOrganizations(token, activeOrg.id)}
+              />
+            )}
+
+            {view === "privacy" && (
+              <PrivacyPolicy 
+                onBack={() => setView(token ? "dashboard" : "landing")}
+              />
+            )}
+
+            {view === "terms" && (
+              <TermsOfService 
+                onBack={() => setView(token ? "dashboard" : "landing")}
               />
             )}
           </main>
         </div>
       )}
 
+      <CookieConsent />
     </div>
   );
 }

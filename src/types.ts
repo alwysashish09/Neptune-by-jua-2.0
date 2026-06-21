@@ -61,6 +61,7 @@ export interface Facility {
   createdAt: string;
   thermalProfile?: ThermalProfile;
   compliance?: ComplianceRecord;
+  countryCode?: string;
 }
 
 export interface ThermalProfile {
@@ -112,6 +113,9 @@ export interface ThermalDelivery {
   gjDelivered: number;
   settledAmount: number;
   createdAt: string;
+  transactionFeePaid?: boolean;
+  transactionFeeAmount?: number;
+  razorpayPaymentId?: string;
 }
 
 export interface CarbonCredit {
@@ -156,4 +160,48 @@ export interface AppState {
     pricePerGJ: number;
     deltaPercent: number;
   }[];
+  billingHistory?: {
+    id: string;
+    organizationId: string;
+    amount: number;
+    purpose: string;
+    plan: string;
+    paymentId: string;
+    date: string;
+    status: string;
+  }[];
+  capsuleIDs?: CapsuleID[];
+  countrySequences?: CountrySequence[];
+  networkCounters?: NetworkCounters;
+}
+
+export enum CapsuleStatus {
+  PENDING_VERIFICATION = "PENDING_VERIFICATION",
+  ACTIVE = "ACTIVE",
+  SUSPENDED = "SUSPENDED"
+}
+
+export interface CapsuleID {
+  id: string;
+  capsuleCode: string;          // "NDC-2026-IN-0247"
+  facilityId: string;
+  publicProfileSlug: string;    // "ndc-2026-in-0247"
+  status: CapsuleStatus;
+  onChainAnchored: boolean;
+  onChainTxHash?: string;
+  issuedAt: string;
+}
+
+export interface CountrySequence {
+  countryCode: string;          // "IN", "DE", "US"
+  nextSequence: number;
+}
+
+export interface NetworkCounters {
+  id: string;                   // "global"
+  totalCapsules: number;
+  totalGjTraded: number;
+  totalLitersWaterOffset: number;
+  totalCo2AvoidedKg: number;
+  lastUpdated: string;
 }

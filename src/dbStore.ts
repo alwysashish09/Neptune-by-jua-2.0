@@ -7,10 +7,26 @@ import * as fs from "fs";
 import { 
   AppState, Role, ComplianceStatus, MatchStatus, ContractStatus, 
   User, Facility, ThermalProfile, ComplianceRecord, Match, Contract, ThermalDelivery, CarbonCredit,
-  OrgPlan, SeatRole, Organization, OrgMember
+  OrgPlan, SeatRole, Organization, OrgMember, CapsuleStatus, CapsuleID, CountrySequence, NetworkCounters
 } from "./types.js";
 
 const FILE_PATH = "./neptune_db.json";
+
+export function lookupCountry(lat: number, lng: number): string {
+  // India bounding box (approximate)
+  if (lat >= 8 && lat <= 38 && lng >= 68 && lng <= 98) {
+    return "IN";
+  }
+  // Germany bounding box (approximate)
+  if (lat >= 47 && lat <= 55 && lng >= 5 && lng <= 16) {
+    return "DE";
+  }
+  // United States bounding box (approximate)
+  if (lat >= 24 && lat <= 50 && lng >= -125 && lng <= -66) {
+    return "US";
+  }
+  return "IN"; // default fallback for MP
+}
 
 // Seed Data
 const DEFAULT_STATE: AppState = {
@@ -595,6 +611,66 @@ export class DBStore {
       }
     }
 
+    // 4. Initialize capsule ID structures
+    if (!this.state.capsuleIDs) {
+      this.state.capsuleIDs = [];
+    }
+    if (!this.state.countrySequences) {
+      this.state.countrySequences = [];
+    }
+
+    // Ensure country code on existing facilities
+    for (const f of this.state.facilities) {
+      if (!f.countryCode) {
+        f.countryCode = lookupCountry(f.latitude, f.longitude);
+      }
+    }
+
+    // Seed capsule IDs for existing facilities if empty
+    if (this.state.capsuleIDs.length === 0) {
+      for (const f of this.state.facilities) {
+        const prefix = f.type === Role.DATA_CENTER ? "NDC" : "NHB";
+        const year = "2026";
+        const cCode = f.countryCode || "IN";
+
+        let seqRow = this.state.countrySequences.find(s => s.countryCode === cCode);
+        if (!seqRow) {
+          seqRow = { countryCode: cCode, nextSequence: 1 };
+          this.state.countrySequences.push(seqRow);
+        }
+
+        const seq = seqRow.nextSequence++;
+        const padded = String(seq).padStart(4, "0");
+        const capsuleCode = `${prefix}-${year}-${cCode}-${padded}`;
+        const publicProfileSlug = capsuleCode.toLowerCase();
+
+        this.state.capsuleIDs.push({
+          id: "cap-" + Math.random().toString(36).substring(2, 11),
+          capsuleCode,
+          facilityId: f.id,
+          publicProfileSlug,
+          status: CapsuleStatus.ACTIVE,
+          onChainAnchored: true,
+          onChainTxHash: "0x" + Math.random().toString(16).substring(2, 10) + "..." + Math.random().toString(16).substring(2, 10),
+          issuedAt: f.createdAt || new Date().toISOString()
+        });
+      }
+    }
+
+    // Reset next sequences to match current capsule counts so there is no collision
+    for (const cCode of ["IN", "DE", "US"]) {
+      const matchCount = this.state.capsuleIDs.filter(c => c.capsuleCode.split("-")[2] === cCode).length;
+      const seqRow = this.state.countrySequences.find(s => s.countryCode === cCode);
+      if (seqRow) {
+        seqRow.nextSequence = Math.max(seqRow.nextSequence, matchCount + 1);
+      } else {
+        this.state.countrySequences.push({ countryCode: cCode, nextSequence: matchCount + 1 });
+      }
+    }
+
+    // Initialize/update Network Counters
+    this.recalculateNetworkCounters();
+
     this.save();
   }
 
@@ -617,6 +693,14 @@ export class DBStore {
 
   public getOrganizationById(id: string): Organization | undefined {
     return this.getOrganizations().find(o => o.id === id);
+  }
+
+  public updateOrganizationPlan(id: string, plan: OrgPlan) {
+    const org = this.getOrganizationById(id);
+    if (org) {
+      org.plan = plan;
+      this.save();
+    }
   }
 
   public getOrgMembers(): OrgMember[] {
@@ -935,6 +1019,156 @@ export class DBStore {
 
   public getCarbonCredits(): CarbonCredit[] {
     return this.state.carbonCredits;
+  }
+
+  public getCapsuleIDs(): CapsuleID[] {
+    return this.state.capsuleIDs || [];
+  }
+
+  public getCapsuleById(id: string): CapsuleID | undefined {
+    return this.state.capsuleIDs?.find(c => c.id === id);
+  }
+
+  public getCapsuleBySlug(slug: string): CapsuleID | undefined {
+    return this.state.capsuleIDs?.find(c => c.publicProfileSlug === slug.toLowerCase());
+  }
+
+  public getCapsuleByFacilityId(facilityId: string): CapsuleID | undefined {
+    return this.state.capsuleIDs?.find(c => c.facilityId === facilityId);
+  }
+
+  public getNetworkCounters(): NetworkCounters {
+    if (!this.state.networkCounters) {
+      this.recalculateNetworkCounters();
+    }
+    return this.state.networkCounters!;
+  }
+
+  public recalculateNetworkCounters(): NetworkCounters {
+    const totalCapsules = this.state.capsuleIDs ? this.state.capsuleIDs.filter(c => c.status === CapsuleStatus.ACTIVE).length : 0;
+    
+    let totalGjTraded = 0;
+    // Sum gjDelivered across all contracts
+    const activeContracts = this.state.contracts;
+    for (const contract of activeContracts) {
+      const dels = this.state.deliveries.filter(d => d.contractId === contract.id);
+      totalGjTraded += dels.reduce((sum, d) => sum + d.gjDelivered, 0);
+    }
+
+    // Liter of water offset: as derived from energy swap avoided cooling tower water evaporation.
+    // Fixed standard ratio: 15.5 liters of freshwater preserved per single GJ of reused thermal volume.
+    const totalLitersWaterOffset = totalGjTraded * 15.5;
+
+    // CO2 avoided in kg: standard avoided fossil heating emission factor.
+    // Factor selection: 50 kg of avoided CO2 greenhouse gases per single GJ of heat recycled.
+    const totalCo2AvoidedKg = totalGjTraded * 50;
+
+    const counters: NetworkCounters = {
+      id: "global",
+      totalCapsules,
+      totalGjTraded: parseFloat(totalGjTraded.toFixed(2)),
+      totalLitersWaterOffset: parseFloat(totalLitersWaterOffset.toFixed(2)),
+      totalCo2AvoidedKg: parseFloat(totalCo2AvoidedKg.toFixed(2)),
+      lastUpdated: new Date().toISOString()
+    };
+
+    this.state.networkCounters = counters;
+    this.save();
+    return counters;
+  }
+
+  public generateCapsuleId(countryCode: string, facilityType: string): { capsuleCode: string, publicProfileSlug: string } {
+    if (!this.state.countrySequences) {
+      this.state.countrySequences = [];
+    }
+
+    const prefix = facilityType === "DATA_CENTER" ? "NDC" : "NHB";
+    const year = new Date().getFullYear().toString();
+    const cCode = countryCode.toUpperCase();
+
+    let seqRow = this.state.countrySequences.find(s => s.countryCode === cCode);
+    if (!seqRow) {
+      seqRow = { countryCode: cCode, nextSequence: 1 };
+      this.state.countrySequences.push(seqRow);
+    }
+
+    const currentSeq = seqRow.nextSequence;
+    seqRow.nextSequence += 1;
+
+    const padded = String(currentSeq).padStart(4, "0");
+    const capsuleCode = `${prefix}-${year}-${cCode}-${padded}`;
+    const publicProfileSlug = capsuleCode.toLowerCase();
+
+    this.save();
+    return { capsuleCode, publicProfileSlug };
+  }
+
+  public createDraftFacilityAndCapsule(facilityName: string, type: Role, latitude: number, longitude: number): { facility: Facility, capsule: CapsuleID } {
+    const fId = "f-draft-" + Math.random().toString(36).substring(2, 11);
+    const countryCode = lookupCountry(latitude, longitude);
+
+    const facility: Facility = {
+      id: fId,
+      name: facilityName,
+      type,
+      latitude,
+      longitude,
+      ownerId: "draft-user",
+      organizationId: "draft-org",
+      createdAt: new Date().toISOString(),
+      countryCode
+    };
+
+    const { capsuleCode, publicProfileSlug } = this.generateCapsuleId(countryCode, type);
+
+    const capsule: CapsuleID = {
+      id: "cap-draft-" + Math.random().toString(36).substring(2, 11),
+      capsuleCode,
+      facilityId: fId,
+      publicProfileSlug,
+      status: CapsuleStatus.PENDING_VERIFICATION,
+      onChainAnchored: true,
+      onChainTxHash: "0x" + Math.random().toString(16).substring(2, 10) + "..." + Math.random().toString(16).substring(2, 10),
+      issuedAt: new Date().toISOString()
+    };
+
+    if (!this.state.capsuleIDs) {
+      this.state.capsuleIDs = [];
+    }
+
+    this.state.facilities.push(facility);
+    this.state.capsuleIDs.push(capsule);
+
+    const newProfile: ThermalProfile = {
+      id: "p-draft-" + Math.random().toString(36).substring(2, 11),
+      facilityId: fId,
+      updatedAt: new Date().toISOString()
+    };
+    if (type === Role.DATA_CENTER) {
+      newProfile.currentExitTempC = 60.0;
+      newProfile.currentLoadPercent = 50.0;
+      newProfile.availableThermalOutputMWth = 8.0;
+    } else {
+      newProfile.requiredTempC = 40.0;
+      newProfile.requiredVolumeGJ = 5000;
+    }
+    this.state.thermalProfiles.push(newProfile);
+
+    if (type === Role.DATA_CENTER) {
+      this.state.complianceRecords.push({
+        id: "c-draft-" + Math.random().toString(36).substring(2, 11),
+        facilityId: fId,
+        currentERF: 0,
+        legalThresholdERF: 0.20,
+        daysToDeadline: 194,
+        status: ComplianceStatus.VIOLATION,
+        calculatedAt: new Date().toISOString()
+      });
+    }
+
+    this.recalculateNetworkCounters();
+    this.save();
+    return { facility, capsule };
   }
 }
 

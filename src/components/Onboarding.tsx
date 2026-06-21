@@ -31,6 +31,22 @@ export default function Onboarding({ token, onOnboardingComplete, onBackToDashbo
   const [requiredTempC, setRequiredTempC] = useState("45");
   const [requiredVolumeGJ, setRequiredVolumeGJ] = useState("5000");
 
+  // Read draft state if pre-minted
+  React.useEffect(() => {
+    try {
+      const draftStr = localStorage.getItem("neptune_pre_minted_draft");
+      if (draftStr) {
+        const d = JSON.parse(draftStr);
+        if (d.name) setName(d.name);
+        if (d.type) setFacilityType(d.type as Role);
+        if (d.latitude !== undefined) setLatitude(d.latitude.toString());
+        if (d.longitude !== undefined) setLongitude(d.longitude.toString());
+      }
+    } catch (e) {
+      console.warn("Failed parsing pre-minted draft", e);
+    }
+  }, []);
+
   const handleNextStep = () => {
     if (step === 1) {
       if (!name.trim()) {
@@ -60,7 +76,7 @@ export default function Onboarding({ token, onOnboardingComplete, onBackToDashbo
     setError(null);
 
     try {
-      // 1. Create Facility
+      // Create Facility (the backend create/update logic handles linking or updating the draft to full facility)
       const response = await fetch("/api/v1/facilities", {
         method: "POST",
         headers: {
@@ -81,7 +97,7 @@ export default function Onboarding({ token, onOnboardingComplete, onBackToDashbo
         throw new Error(data.error?.message || "Failed to commit facility to directory");
       }
 
-      // 2. Set Thermal Profile Values
+      // Set Thermal Profile Values
       const profileUpdates: any = facilityType === Role.DATA_CENTER ? {
         currentExitTempC: parseFloat(currentExitTempC),
         currentLoadPercent: 60,
@@ -104,6 +120,9 @@ export default function Onboarding({ token, onOnboardingComplete, onBackToDashbo
         const pError = await profileResponse.json();
         throw new Error(pError.error?.message || "Failed to provision thermal profile criteria");
       }
+
+      // On onboarding complete, clear the temporary localStorage draft
+      localStorage.removeItem("neptune_pre_minted_draft");
 
       // Complete
       onOnboardingComplete(data);

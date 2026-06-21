@@ -95,7 +95,7 @@ export default function Dashboard({
   const addLog = (msg: string, type: "info" | "warn" | "success" = "info") => {
     const timeStr = new Date().toLocaleTimeString();
     setRecentLogs(prev => [
-      { id: Date.now().toString(), time: timeStr, msg, type },
+      { id: Date.now().toString() + "-" + Math.random().toString(36).substring(2, 6), time: timeStr, msg, type },
       ...prev.slice(0, 15)
     ]);
   };
