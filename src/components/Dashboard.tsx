@@ -379,7 +379,7 @@ export default function Dashboard({
         </>
       ) : (
         <div className="flex flex-col items-center justify-center p-12 bg-[#131822] border border-[#1F2733] rounded-xl text-center min-h-[350px]">
-          <layers className="w-12 h-12 text-[#94A3B8] mb-4 animate-bounce" />
+          <Layers className="w-12 h-12 text-[#94A3B8] mb-4 animate-bounce" />
           <h3 className="text-lg font-semibold mb-2">No Active Facilities Registered</h3>
           <p className="text-[#94A3B8] text-sm max-w-md mb-6">
             Register your high-density Data Center or buyer energy network to activate the live Thermal Twin simulator and compliance matrix.

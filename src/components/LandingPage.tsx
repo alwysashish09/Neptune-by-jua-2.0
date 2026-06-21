@@ -3,10 +3,11 @@ import {
   Flame, ShieldCheck, ArrowRight, Zap, RefreshCw, Layers, Globe, 
   Droplets, Sparkles, AlertCircle, Eye, ArrowUpRight, Search, 
   Anchor, Server, Cpu, CheckCircle, Database, HelpCircle, 
-  Users, Activity, TrendingUp, Info, ArrowLeft, Trophy, MapPin, BadgePercent, Waves
+  Users, Activity, TrendingUp, Info, ArrowLeft, Trophy, MapPin, BadgePercent, Waves, Download
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import MapCanvas from "./MapCanvas.js";
+import { generateWhitepaper } from "../lib/whitepaper.js";
 
 interface LandingPageProps {
   onNavigate: (view: string) => void;
@@ -57,6 +58,19 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
   const [facName, setFacName] = useState("");
   const [facType, setFacType] = useState<"DATA_CENTER" | "HEAT_BUYER">("DATA_CENTER");
   const [facLat, setFacLat] = useState("23.2500");
+
+  const handleDownloadReport = () => {
+    const reportContent = generateWhitepaper();
+    const blob = new Blob([reportContent], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "Neptune_Architecture_Whitepaper.md";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
   const [facLng, setFacLng] = useState("77.4100");
   const [checkingLocation, setCheckingLocation] = useState(false);
   const [claimedMatches, setClaimedMatches] = useState<number | null>(null);
@@ -174,8 +188,10 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
   }, [phase]);
 
   // Mouse position tracker
+  const mousePosRef = useRef({ x: 0, y: 0 });
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
       setMousePos({ x: e.clientX, y: e.clientY });
       setTimeout(() => {
         setCursorBg({ x: e.clientX, y: e.clientY });
@@ -187,7 +203,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
 
   // HTML5 Bubbles Physics Canvas Setup
   useEffect(() => {
-    if (phase !== "reveal_active" && phase !== "diving") return;
+    if (phase !== "reveal_active" && phase !== "diving" && phase !== "splash") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -265,8 +281,10 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
 
       // Physics loop
       bubbles.forEach((b) => {
-        b.y -= b.speedY;
-        b.wobble += b.wobbleSpeed;
+        // Multiplier for diving effect
+        const isDiving = phase === "diving" || phase === "splash";
+        b.y -= b.speedY * (isDiving ? 8 : 1);
+        b.wobble += b.wobbleSpeed * (isDiving ? 3 : 1);
         b.x += Math.sin(b.wobble) * 0.8;
 
         if (b.y < -30) {
@@ -274,8 +292,8 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           b.x = Math.random() * width;
         }
 
-        const dx = b.x - mousePos.x;
-        const dy = b.y - mousePos.y;
+        const dx = b.x - mousePosRef.current.x;
+        const dy = b.y - mousePosRef.current.y;
         const dist = Math.hypot(dx, dy);
         const effectRadius = 140;
 
@@ -319,7 +337,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       cancelAnimationFrame(id);
       window.removeEventListener("resize", handleResize);
     };
-  }, [phase, mousePos]);
+  }, [phase]);
 
   const startPlunge = () => {
     setPhase("diving");
@@ -518,6 +536,20 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           </motion.div>
         )}
 
+        {/* PHASE 2.5: SPLASH IMPACT */}
+        {phase === "splash" && (
+          <motion.div 
+            key="splash-impact"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1.5 }}
+            exit={{ opacity: 0, scale: 3 }}
+            transition={{ duration: 1.1, ease: "easeOut" }}
+            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none mix-blend-screen"
+          >
+            <div className="w-[150vh] h-[150vh] rounded-full bg-[radial-gradient(circle,_rgba(255,255,255,1)_0%,_rgba(79,195,247,0.8)_40%,_rgba(0,0,0,0)_80%)] blur-2xl" />
+          </motion.div>
+        )}
+
         {/* PHASE 3: MOUNT LIVE ENVIRONMENT */}
         {phase === "reveal_active" && (
           <motion.div 
@@ -656,6 +688,16 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
                             Explore Live Network Grid
                           </button>
                         </div>
+
+                        <div className="mt-8 flex justify-center lg:justify-start">
+                          <button 
+                            onClick={handleDownloadReport}
+                            className="flex items-center gap-2 px-6 py-3 rounded-lg border border-slate-700/50 bg-slate-800/30 text-slate-300 hover:text-white hover:bg-slate-700/50 transition-colors text-xs font-bold font-mono tracking-wide cursor-pointer"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Technical Whitepaper (Detailed Report)
+                          </button>
+                        </div>
                       </div>
 
                       {/* Right micro-instrument simulator */}
@@ -762,6 +804,204 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
                         </div>
                       </div>
                     </div>
+
+                    {/* How It Works / Details Section */}
+                    <div className="max-w-7xl mx-auto px-6 py-20 mt-12 border-t border-sky-950/40 relative" id="how-it-works">
+                      <div className="text-center max-w-3xl mx-auto mb-16 relative z-10">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-sky-500/20 bg-sky-500/10 text-[#4FC3F7] text-[10px] font-mono mb-6 shadow-inner tracking-widest uppercase font-bold">
+                          <Info className="w-3.5 h-3.5" /> Platform Architecture
+                        </div>
+                        <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-white mb-4">Complete System Details</h2>
+                        <p className="text-sm text-[#94A3B8] leading-relaxed mx-auto max-w-2xl font-sans">
+                          Neptune is an offline-first thermodynamic settlement ledger and CE-96 compliance registry. The system tracks, matches, and logs thermal energy transfers between high-density Data Centers and municipal heating networks.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10">
+                        
+                        <div className="space-y-8">
+                          <div className="p-6 bg-[#0E131F]/80 border border-[#1F2733] rounded-2xl hover:border-[#FF6B35]/30 transition group backdrop-blur-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#FF6B35]/10 to-transparent blur-2xl group-hover:from-[#FF6B35]/20 transition duration-500" />
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2 flex items-center gap-2">
+                              <Cpu className="w-5 h-5 text-[#FF6B35]" /> Core Modules
+                            </h3>
+                            <ul className="space-y-3 mt-4">
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-[#FF6B35] mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Thermal Profile Management</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Manage live thermal outputs, liquid exit temperatures, and load percentages for Data Centers. Configure thermal requirements for heat buyers (e.g., Greenhouses, District Heating).</span>
+                                </div>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-[#FF6B35] mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Geospatial Matching Engine</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Live mapping grid that calculates distances, pipe heat drop loss, and optimal sector paths to couple emitters with heat sinks within a functional 15km radius.</span>
+                                </div>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-[#FF6B35] mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Contract Negotiation Pipeline</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Streamlined workflow from matching to contract sealing. Negotiate price (per GJ), duration, and digitally sign binding heat supply agreements.</span>
+                                </div>
+                              </li>
+                            </ul>
+                          </div>
+
+                          <div className="p-6 bg-[#0E131F]/80 border border-[#1F2733] rounded-2xl hover:border-emerald-500/30 transition group backdrop-blur-xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-emerald-500/10 to-transparent blur-2xl group-hover:from-emerald-500/20 transition duration-500" />
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2 flex items-center gap-2">
+                              <Droplets className="w-5 h-5 text-emerald-400" /> Compliance & Audit
+                            </h3>
+                            <ul className="space-y-3 mt-4">
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">CE-Directive Compliance</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Track Energy Reuse Factor (ERF) thresholds in real-time. Link official third-party audit reports (PDF) to verify claims and protect against computational penalty risks.</span>
+                                </div>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Carbon Credit Generation</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Systematically converts traded heat volume (GJ) into cryptographically verifiable carbon offset certificates based on a 50kg offset per 1 GJ mapped.</span>
+                                </div>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="space-y-8">
+                          <div className="p-6 bg-[#0E131F]/80 border border-[#1F2733] rounded-2xl hover:border-[#4FC3F7]/30 transition group backdrop-blur-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-[#4FC3F7]/10 to-transparent blur-2xl group-hover:from-[#4FC3F7]/20 transition duration-500" />
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2 flex items-center gap-2">
+                              <Server className="w-5 h-5 text-[#4FC3F7]" /> System Architecture
+                            </h3>
+                            <ul className="space-y-3 mt-4">
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-[#4FC3F7] mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Fluid Twin Protocols</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Digital twin simulation that synchronizes with IoT sensors from cooling infrastructure to model exit liquid temps and dynamic heat exchange volume over time.</span>
+                                </div>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-[#4FC3F7] mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Telemetry Log Ledger</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Immutable transactional log array capturing every gigajoule (GJ) delivered over the physical pipe network. These generate instantaneous billing settlements.</span>
+                                </div>
+                              </li>
+                            </ul>
+                          </div>
+                          
+                          <div className="p-6 bg-[#0E131F]/80 border border-[#1F2733] rounded-2xl hover:border-indigo-500/30 transition group backdrop-blur-xl relative overflow-hidden">
+                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl from-indigo-500/10 to-transparent blur-2xl group-hover:from-indigo-500/20 transition duration-500" />
+                            <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2 flex items-center gap-2">
+                              <TrendingUp className="w-5 h-5 text-indigo-400" /> Billing & Enterprise
+                            </h3>
+                            <ul className="space-y-3 mt-4">
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">Organization & Seat Control</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Role-Based Access Control (RBAC). Invite operators and admins via secure email tokens. Ensure isolated data silos per registered legal business entity.</span>
+                                </div>
+                              </li>
+                              <li className="flex items-start gap-3">
+                                <CheckCircle className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="block text-sm font-bold text-gray-200">SaaS Gateway & Grid Fees</span>
+                                  <span className="block text-xs text-[#94A3B8] mt-0.5">Integrated Razorpay billing for multi-tier platform licensing (Starter, Growth, Enterprise). Automated 5% transaction tax extraction on heat supply invoices.</span>
+                                </div>
+                              </li>
+                            </ul>
+                          </div>
+
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Complete Example & Benefits Walkthrough */}
+                    <div className="max-w-7xl mx-auto px-6 py-20 mt-12 border-t border-sky-950/40 relative" id="walkthrough">
+                      <div className="text-center max-w-3xl mx-auto mb-16 relative z-10">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-orange-500/20 bg-orange-500/10 text-orange-400 text-[10px] font-mono mb-6 shadow-inner tracking-widest uppercase font-bold">
+                          <Zap className="w-3.5 h-3.5" /> End-to-End Walkthrough
+                        </div>
+                        <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter text-white mb-4">A Complete Example</h2>
+                        <p className="text-sm text-[#94A3B8] leading-relaxed mx-auto max-w-2xl font-sans">
+                          How a hyperscale Data Center and a local District Heating grid can use Neptune to eliminate waste, ensure compliance, and generate a new revenue stream.
+                        </p>
+                      </div>
+
+                      <div className="relative z-10 space-y-12 max-w-5xl mx-auto">
+                        
+                        {/* Step 1 */}
+                        <div className="flex flex-col md:flex-row gap-6 items-start bg-[#0E131F]/80 border border-[#1F2733] p-6 lg:p-8 rounded-2xl relative overflow-hidden group hover:border-slate-600 transition">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-slate-500/5 to-transparent blur-2xl group-hover:from-slate-500/10 transition duration-500" />
+                          <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[#1C2332] border border-[#2B3547] text-2xl font-black text-white shadow-lg">1</div>
+                          <div className="space-y-3 flex-1 lg:pr-12">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">Onboarding & Registration</h3>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Setup:</strong> "Northeast Cloud DC" operates a 20MW facility generating massive heat. They register on Neptune as a <em>Data Center (Emitter)</em>. "GreenValley District Heating" operates a grid that needs hot water to heat local homes. They register as a <em>Heat Buyer (Sink)</em>.
+                            </p>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Benefit:</strong> Both parties get a secured organization workspace. The DC starts tracking its Energy Reuse Factor (ERF) to prove compliance with EU CE-directives, avoiding costly regulatory fines.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Step 2 */}
+                        <div className="flex flex-col md:flex-row gap-6 items-start bg-[#0E131F]/80 border border-[#1F2733] p-6 lg:p-8 rounded-2xl relative overflow-hidden group hover:border-[#4FC3F7]/30 transition">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#4FC3F7]/5 to-transparent blur-2xl group-hover:from-[#4FC3F7]/10 transition duration-500" />
+                          <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[#1C2332] border border-[#4FC3F7]/30 text-[#4FC3F7] text-2xl font-black shadow-lg shadow-[#4FC3F7]/10">2</div>
+                          <div className="space-y-3 flex-1 lg:pr-12">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">Geospatial Matching</h3>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Process:</strong> Neptune's geospatial engine analyzes distances. It detects that Northeast Cloud DC is only 1.2km away from GreenValley. The thermal profile matches perfectly: the DC outputs water at 55°C, and GreenValley needs at least 50°C.
+                            </p>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Benefit:</strong> Neptune automatically proposes a 95% Match Score. No manual grid surveying required. The system calculates pipe heat-loss drops over the distance, verifying the physics hold up.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Step 3 */}
+                        <div className="flex flex-col md:flex-row gap-6 items-start bg-[#0E131F]/80 border border-[#1F2733] p-6 lg:p-8 rounded-2xl relative overflow-hidden group hover:border-[#FF6B35]/30 transition">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#FF6B35]/5 to-transparent blur-2xl group-hover:from-[#FF6B35]/10 transition duration-500" />
+                          <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[#1C2332] border border-[#FF6B35]/30 text-[#FF6B35] text-2xl font-black shadow-lg shadow-[#FF6B35]/10">3</div>
+                          <div className="space-y-3 flex-1 lg:pr-12">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">Contracting & Delivery</h3>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Process:</strong> They negotiate and sign a digital contract on Neptune for heat supply at $5.15 / GJ. The DC installs IoT flow meters. Hot water technically flows through the newly laid pipe infrastructure.
+                            </p>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Benefit:</strong> Every hour, Neptune synchronizes with telemetry APIs to log the exact GJ volume delivered. It acts as an undisputed, mathematically verifiable truth ledger that both organizations view on their dashboards.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Step 4 */}
+                        <div className="flex flex-col md:flex-row gap-6 items-start bg-[#0E131F]/80 border border-[#1F2733] p-6 lg:p-8 rounded-2xl relative overflow-hidden group hover:border-emerald-500/30 transition">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-500/5 to-transparent blur-2xl group-hover:from-emerald-500/10 transition duration-500" />
+                          <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-[#1C2332] border border-emerald-500/30 text-emerald-400 text-2xl font-black shadow-lg shadow-emerald-500/10">4</div>
+                          <div className="space-y-3 flex-1 lg:pr-12">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2 tracking-tight">Settlement & Green Credits</h3>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Process:</strong> As heat is delivered, the buyer's invoice is automatically updated. Additionally, Neptune calculates that the DC prevented CO2 output by offsetting the district boiler. Neptune cryptographically mints Carbon Offset Credits.
+                            </p>
+                            <p className="text-sm text-[#94A3B8] leading-relaxed">
+                              <strong>The Benefit:</strong> Total monetization. The Data Center turns a major expense (cooling) into a revenue center (selling heat + selling carbon credits). The District Network gets cheap, reliable, and clean heat. The software automates the paperwork, billing, and regulatory audits seamlessly.
+                            </p>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
                   </motion.div>
                 )}
 

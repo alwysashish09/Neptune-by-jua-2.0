@@ -71,6 +71,18 @@ const DEFAULT_STATE: AppState = {
       name: "Neptune Admin Org",
       plan: OrgPlan.ENTERPRISE,
       createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
+    },
+    {
+      id: "org-us-dc",
+      name: "US Northeast Data Centers",
+      plan: OrgPlan.ENTERPRISE,
+      createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
+    },
+    {
+      id: "org-us-buyer",
+      name: "US Metro District Heating",
+      plan: OrgPlan.GROWTH,
+      createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
     }
   ],
   orgMembers: [
@@ -100,6 +112,33 @@ const DEFAULT_STATE: AppState = {
       invitedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
       acceptedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
       email: "admin@neptune.io"
+    },
+    {
+      id: "m-dc-sub",
+      organizationId: "org-dc-owner-user-id",
+      userId: "m-dc-sub",
+      seatRole: SeatRole.OPERATOR,
+      invitedAt: new Date("2026-06-02T00:00:00Z").toISOString(),
+      acceptedAt: new Date("2026-06-02T00:00:00Z").toISOString(),
+      email: "operator@mandideep.io"
+    },
+    {
+      id: "m-us-dc-owner",
+      organizationId: "org-us-dc",
+      userId: "us-dc-owner",
+      seatRole: SeatRole.ADMIN,
+      invitedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
+      acceptedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
+      email: "us_dc_owner@neptune.io"
+    },
+    {
+      id: "m-us-buyer-owner",
+      organizationId: "org-us-buyer",
+      userId: "us-buyer-owner",
+      seatRole: SeatRole.ADMIN,
+      invitedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
+      acceptedAt: new Date("2026-06-01T00:00:00Z").toISOString(),
+      email: "us_buyer_owner@neptune.io"
     }
   ],
   facilities: [
@@ -227,6 +266,38 @@ const DEFAULT_STATE: AppState = {
       ownerId: "buyer-owner-user-id",
       organizationId: "org-buyer-owner-user-id",
       createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
+    },
+    // US Cluster
+    {
+      id: "dc-facility-us-1",
+      name: "Ashburn DC Network Central",
+      type: Role.DATA_CENTER,
+      latitude: 39.0438,
+      longitude: -77.4874,
+      coolingSystemType: "Air-Water Exchanger",
+      ownerId: "us-dc-owner",
+      organizationId: "org-us-dc",
+      createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
+    },
+    {
+      id: "buyer-facility-us-1",
+      name: "Loudoun County Medical Center API",
+      type: Role.HEAT_BUYER,
+      latitude: 39.0550,
+      longitude: -77.4950,
+      ownerId: "us-buyer-owner",
+      organizationId: "org-us-buyer",
+      createdAt: new Date("2026-06-01T00:00:00Z").toISOString()
+    },
+    {
+      id: "buyer-facility-us-2",
+      name: "Ashburn Community Pool",
+      type: Role.HEAT_BUYER,
+      latitude: 39.0320,
+      longitude: -77.4800,
+      ownerId: "us-buyer-owner",
+      organizationId: "org-us-buyer",
+      createdAt: new Date("2026-06-02T00:00:00Z").toISOString()
     }
   ],
   thermalProfiles: [
@@ -318,6 +389,29 @@ const DEFAULT_STATE: AppState = {
       requiredTempC: 62.0,
       requiredVolumeGJ: 410,
       updatedAt: new Date().toISOString()
+    },
+    // US Profiles
+    {
+      id: "profile-dc-us-1",
+      facilityId: "dc-facility-us-1",
+      currentExitTempC: 55.0,
+      currentLoadPercent: 88.0,
+      availableThermalOutputMWth: 12.5,
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "profile-buyer-us-1",
+      facilityId: "buyer-facility-us-1",
+      requiredTempC: 50.0,
+      requiredVolumeGJ: 800,
+      updatedAt: new Date().toISOString()
+    },
+    {
+      id: "profile-buyer-us-2",
+      facilityId: "buyer-facility-us-2",
+      requiredTempC: 38.0,
+      requiredVolumeGJ: 350,
+      updatedAt: new Date().toISOString()
     }
   ],
   complianceRecords: [
@@ -346,6 +440,15 @@ const DEFAULT_STATE: AppState = {
       legalThresholdERF: 0.20,
       daysToDeadline: 194,
       status: ComplianceStatus.COMPLIANT,
+      calculatedAt: new Date().toISOString()
+    },
+    {
+      id: "compliance-dc-us-1",
+      facilityId: "dc-facility-us-1",
+      currentERF: 0.18,
+      legalThresholdERF: 0.20,
+      daysToDeadline: 10,
+      status: ComplianceStatus.AT_RISK,
       calculatedAt: new Date().toISOString()
     }
   ],
@@ -399,6 +502,26 @@ const DEFAULT_STATE: AppState = {
       matchScore: 95,
       status: MatchStatus.SUGGESTED,
       createdAt: new Date("2026-06-05T12:00:00Z").toISOString()
+    },
+    {
+      id: "match-us-1",
+      sourceFacilityId: "dc-facility-us-1",
+      buyerFacilityId: "buyer-facility-us-1",
+      distanceKm: 1.5,
+      tempDropC: 0.75,
+      matchScore: 88,
+      status: MatchStatus.ACCEPTED,
+      createdAt: new Date("2026-06-05T12:00:00Z").toISOString()
+    },
+    {
+      id: "match-us-2",
+      sourceFacilityId: "dc-facility-us-1",
+      buyerFacilityId: "buyer-facility-us-2",
+      distanceKm: 2.1,
+      tempDropC: 1.05,
+      matchScore: 78,
+      status: MatchStatus.PROPOSED,
+      createdAt: new Date("2026-06-06T12:00:00Z").toISOString()
     }
   ],
   contracts: [
@@ -417,6 +540,14 @@ const DEFAULT_STATE: AppState = {
       pricePerGJ: 6.20,
       startDate: new Date("2026-06-04T00:00:00Z").toISOString(),
       endDate: new Date("2027-06-04T00:00:00Z").toISOString()
+    },
+    {
+      id: "contract-us-1",
+      matchId: "match-us-1",
+      status: ContractStatus.ACTIVE,
+      pricePerGJ: 5.15,
+      startDate: new Date("2026-06-08T00:00:00Z").toISOString(),
+      endDate: new Date("2027-06-08T00:00:00Z").toISOString()
     }
   ],
   deliveries: [], // Will populate in seeding
@@ -426,7 +557,8 @@ const DEFAULT_STATE: AppState = {
     { id: "m-uk", name: "UK Green Grid Premium", pricePerGJ: 6.85, deltaPercent: -0.4 },
     { id: "m-in", name: "Bhopal Carbon-Offset Multiplier", pricePerGJ: 4.10, deltaPercent: 2.5 },
     { id: "m-us", name: "US District Therm Unit (DTU)", pricePerGJ: 5.15, deltaPercent: 0.8 }
-  ]
+  ],
+  billingHistory: []
 };
 
 // Auto-populate 14 days of historical deliveries & carbon credits for active contracts
@@ -434,7 +566,28 @@ const DEFAULT_STATE: AppState = {
 const populateSeededHistory = (state: AppState) => {
   const deliveries: ThermalDelivery[] = [];
   const carbonCredits: CarbonCredit[] = [];
+  const billingHistory: any[] = [];
   const today = new Date("2026-06-20T12:00:00Z");
+
+  // Add some mock billing history
+  const orgs = state.organizations || [];
+  for (const org of orgs) {
+    const monthsBack = [1, 2, 3];
+    monthsBack.forEach(m => {
+      const bDate = new Date(today);
+      bDate.setMonth(bDate.getMonth() - m);
+      billingHistory.push({
+        id: "bill-" + Math.random().toString(36).substring(2, 11),
+        organizationId: org.id,
+        amount: org.plan === OrgPlan.ENTERPRISE ? 1999 : org.plan === OrgPlan.GROWTH ? 99 : 0,
+        purpose: "SaaS Subscription (Monthly)",
+        plan: org.plan,
+        paymentId: "pay_" + Math.random().toString(36).substring(2, 11),
+        date: bDate.toISOString(),
+        status: "Completed"
+      });
+    });
+  }
 
   for (let i = 14; i >= 0; i--) {
     const deliveryDate = new Date(today);
@@ -471,8 +624,42 @@ const populateSeededHistory = (state: AppState) => {
       timestampEnd: endStr2,
       gjDelivered: parseFloat(gj2.toFixed(2)),
       settledAmount: parseFloat(amount2.toFixed(2)),
-      createdAt: endStr2
+      createdAt: endStr2,
+      transactionFeePaid: true,
+      transactionFeeAmount: parseFloat((amount2 * 0.05).toFixed(2))
     });
+
+    // Contract US 1 Delivery
+    if (i <= 10) {
+      const usId = "cus-del-" + i;
+      const gjUs = 200 + Math.sin(i * 2) * 30 + Math.random() * 20;
+      const amountUs = gjUs * 5.15;
+      const startStrUs = new Date(deliveryDate.getTime() - 6 * 3600 * 1000).toISOString();
+      const endStrUs = deliveryDate.toISOString();
+
+      deliveries.push({
+        id: usId,
+        contractId: "contract-us-1",
+        timestampStart: startStrUs,
+        timestampEnd: endStrUs,
+        gjDelivered: parseFloat(gjUs.toFixed(2)),
+        settledAmount: parseFloat(amountUs.toFixed(2)),
+        createdAt: endStrUs,
+        transactionFeePaid: true,
+        transactionFeeAmount: parseFloat((amountUs * 0.05).toFixed(2))
+      });
+      
+      // Carbon credits
+      if (i % 3 === 0) {
+        carbonCredits.push({
+          id: "cc-seeded-us-" + i,
+          deliveryId: usId,
+          gjOffset: parseFloat((gjUs * 0.05).toFixed(2)), 
+          certificateHash: "cc" + Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10),
+          issuedAt: endStrUs
+        });
+      }
+    }
 
     // Generate credit for Contract 1 on day 7 to represent seed requirements
     if (i === 7) {
@@ -488,6 +675,7 @@ const populateSeededHistory = (state: AppState) => {
 
   state.deliveries = deliveries;
   state.carbonCredits = carbonCredits;
+  state.billingHistory = billingHistory;
 };
 
 // Setup initial state on import
