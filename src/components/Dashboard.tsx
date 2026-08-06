@@ -11,6 +11,7 @@ import {
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Facility, ComplianceRecord, ComplianceStatus } from "../types.js";
 import AquaRlPanel from "./AquaRlPanel.js";
+import NeptuneAIAssistant from "./NeptuneAIAssistant.js";
 
 interface DashboardProps {
   token: string;
@@ -395,6 +396,19 @@ export default function Dashboard({
             Launch Wizard Onboarding
           </button>
         </div>
+      )}
+      
+      {/* GEMINI ASSISTANT */}
+      {selectedFacility && (
+        <NeptuneAIAssistant 
+          token={token} 
+          facilityContext={{ 
+            facilityId: selectedFacility.id, 
+            facilityName: selectedFacility.name,
+            compliance, 
+            thermalProfile: selectedFacility.thermalProfile 
+          }} 
+        />
       )}
     </div>
   );

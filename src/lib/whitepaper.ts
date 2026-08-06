@@ -33,6 +33,9 @@ Every GJ of heat successfully transferred away from atmospheric venting and towa
 - **Geospatial Mapping:** Visualization of nodes and routing optimization based on pipe friction, pressure drop, and thermal leakage (ΔT) equations.
 - **Contract Negotiation Pipeline:** A secure portal for heat buyers and sellers to agree upon thermal capacities, temperatures, delivery windows, and base prices per GJ.
 - **Real-time ERF Tracking UI:** A mission-control dashboard showing compliance deadlines, current ERF ratios against legal thresholds, and automated alert systems for "At-Risk" zones.
+- **Aqua-RL Cooling Controller:** A Reinforcement Learning (RL) agent trained via Proximal Policy Optimization (PPO) that dynamically modulates facility cooling pump flow rates and recycled-vs-freshwater mix ratios. This subsystem explicitly minimizes freshwater draw while adhering to strict thermal safety bounds (hard override if T > 80°C). It learns to pre-cool systems proactively based on predicted computational loads.
+- **Micro-transaction Settlement:** Direct integration with SaaS payment gateways for automated, usage-based invoicing per GJ of delivered thermodynamic output.
+- **Interactive Twin Dashboard:** A live, Socket.io-driven UI rendering server outlet temperatures, water profile tank levels, RL-agent decision logs, and live efficiency metrics in an immersive environment.
 
 ---
 

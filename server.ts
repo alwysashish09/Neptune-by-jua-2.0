@@ -7,6 +7,7 @@ import express from "express";
 import path from "path";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
 import { db } from "./src/dbStore.js";
 import { findMatches } from "./src/matchingService.js";
 import { recalculateCompliance } from "./src/complianceService.js";
@@ -1581,6 +1582,43 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+
+// ==========================================
+// 10. GEMINI AI ASSISTANT
+// ==========================================
+
+const getAiClient = () => {
+  if (!process.env.GEMINI_API_KEY) return null;
+  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+};
+
+app.post("/api/v1/gemini/chat", authMiddleware, async (req, res) => {
+  try {
+    const { message, contextObj } = req.body;
+    const ai = getAiClient();
+    if (!ai) {
+      return res.status(503).json({ error: { message: "Gemini API key is not configured." } });
+    }
+
+    const systemInstruction = `You are Neptune AI Assistant, an advanced thermodynamic and cooling systems assistant built into the Neptune console.
+Your goal is to answer questions about the data center's thermal profiling, Aqua-RL Reinforcement Learning agent, water efficiency metrics, and general routing or operations.
+Here is the live JSON context for the currently selected facility to ground your answers:
+${JSON.stringify(contextObj, null, 2)}
+Respond concisely in plain text or markdown. Do not hallucinate data outside this context if asked about current system state. Keep explanations focused and professional.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        { role: "user", parts: [{ text: systemInstruction + "\\n\\nUser: " + message }] }
+      ]
+    });
+
+    res.json({ text: response.text });
+  } catch (err: any) {
+    console.error("Gemini AI API Error:", err);
+    res.status(500).json({ error: { message: "Failed to generate AI response. Please try again later." } });
+  }
+});
 
 // Start background telemetry & market updates
 simulator.start();
